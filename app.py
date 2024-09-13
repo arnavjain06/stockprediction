@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 def load_data(ticker, start, end):
     df = yf.download(ticker, start, end)
     df.dropna(inplace=True)
-    
+
     # Moving Averages
     df['SMA200'] = df['Close'].rolling(window=200).mean()
     df['SMA50'] = df['Close'].rolling(window=50).mean()
@@ -43,7 +43,7 @@ def load_data(ticker, start, end):
     df['returns'] = (df['Close'] - df['Close'].shift(1)) / df['Close'].shift(1)
 
     df = df.drop('Adj Close', axis=1)
-    
+
     return df
 
 # Function to prepare data for the model
@@ -51,7 +51,7 @@ def prepare_data(df):
     features = ['Open', 'High', 'Low', 'Close', 'Volume', 'SMA200', 'SMA50', 'RSI', 'MACD', 'Signal_Line', 'BB_upper', 'BB_lower', 'returns']
     X = df[features]
     y = df['Close']
-    
+
     X = X.dropna()
     y = y[X.index]
 
@@ -87,34 +87,36 @@ TODAY = date.today().strftime("%Y-%m-%d")
 
 if ticker:
     df = load_data(ticker, START, TODAY)
-    
+
     st.subheader(f"Recent Data for {ticker}")
     st.write(df.tail())
 
     X_train, X_test, y_train, y_test, scaler = prepare_data(df)
 
     model = create_model(X_train)
+
+if st.button("Train Model"):
+    model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.1, verbose=1)
+    st.success("Model trained!")
+
+    # Predict on test data
+    predictions = model.predict(X_test)
     
-    if st.button("Train Model"):
-        model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.1, verbose=1)
-        st.success("Model trained!")
+    st.subheader("Predictions vs Actual")
+    plt.figure(figsize=(12, 6))
+    plt.plot(y_test.index, y_test.values, label='Actual')
+    plt.plot(y_test.index, predictions, label='Predicted')
+    plt.title(f'{ticker} Stock Price Prediction')
+    plt.xlabel('Date')
+    plt.ylabel('Stock Price')
+    plt.legend()
+    st.pyplot(plt)
 
-        # Predict on test data
-        predictions = model.predict(X_test)
-        
-        st.subheader("Predictions vs Actual")
-        plt.figure(figsize=(12, 6))
-        plt.plot(y_test.index, y_test.values, label='Actual')
-        plt.plot(y_test.index, predictions, label='Predicted')
-        plt.title(f'{ticker} Stock Price Prediction')
-        plt.xlabel('Date')
-        plt.ylabel('Stock Price')
-        plt.legend()
-        st.pyplot(plt)
+    # Predict the next day
+    next_day_prediction = model.predict(X_test[-1].reshape(1, 1, X_test.shape[2]))
+    next_day_price = scaler.inverse_transform(np.hstack((np.zeros((1, X_test.shape[2]-1)), next_day_prediction.reshape(-1, 1))))[:, -1]
+    
+    st.subheader("Next Day Prediction")
+    st.write(f"Predicted Price for Next Day: {next_day_price[0]:.2f}")
 
-        # Predict the next day
-        next_day_prediction = model.predict(X_test[-1].reshape(1, 1, X_test.shape[2]))
-        next_day_price = scaler.inverse_transform(np.hstack((np.zeros((1, X_test.shape[2]-1)), next_day_prediction.reshape(-1, 1))))[:, -1]
-        
-        st.subheader("Next Day Prediction")
-        st.write(f"Predicted Price for Next Day: {next_day_price[0]:.2f}")
+
